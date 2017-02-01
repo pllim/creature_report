@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Generated HTML outputs
+creature_report/*.html
+
 # C extensions
 *.so
 
