@@ -4,9 +4,11 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import stat
+import sys
 import time
 from collections import Counter
 from datetime import datetime
+from difflib import context_diff
 
 __all__ = ['CreatureReport', 'CaptainBarnacle', 'rm_old_reps']
 
@@ -129,6 +131,25 @@ class CaptainBarnacle(object):
         os.symlink(self.html, dstfile)
 
 
+def diff_last_two(root, pattern='rep*.html'):
+    """Diff the latest two files matching given pattern in root.
+
+    This is useful to decide whether some known warnings are fixed
+    or new warnings popped up.
+
+    """
+    f_prev, f_next = sorted(glob.iglob(os.path.join(root, pattern)))[-2:]
+
+    with open(f_prev) as fin:
+        s1 = fin.readlines()
+
+    with open(f_next) as fin:
+        s2 = fin.readlines()
+
+    for line in context_diff(s1, s2, fromfile=f_prev, tofile=f_next):
+        sys.stdout.write(line)
+
+
 def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
     """Delete all files matching ``pattern`` in ``root``
     older than ``max_life`` days.
@@ -180,3 +201,5 @@ if __name__ == '__main__':
 
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
     rm_old_reps(os.environ['HTML_DIR'])
+
+    diff_last_two(os.environ['HTML_DIR'])
