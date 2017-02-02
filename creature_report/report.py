@@ -129,6 +129,7 @@ class CaptainBarnacle(object):
         if os.path.lexists(dstfile):
             os.unlink(dstfile)
         os.symlink(self.html, dstfile)
+        print('{} is now pointed to {}'.format(dstfile, self.html))
 
 
 def diff_last_two(root, pattern='rep*.html'):
@@ -142,12 +143,16 @@ def diff_last_two(root, pattern='rep*.html'):
 
     with open(f_prev) as fin:
         s1 = fin.readlines()
-
     with open(f_next) as fin:
         s2 = fin.readlines()
 
-    for line in context_diff(s1, s2, fromfile=f_prev, tofile=f_next):
-        sys.stdout.write(line)
+    diff_lines = context_diff(s1, s2, fromfile=f_prev, tofile=f_next)
+
+    if len(diff_lines) < 1:
+        print('No diff')
+    else:
+        for line in diff_lines:
+            sys.stdout.write(line)
 
 
 def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
@@ -172,6 +177,8 @@ def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
     """
     max_sec = 86400.0 * max_life
     t_now = time.time()  # sec
+
+    print('Cleaning old files...')
 
     for f in glob.iglob(os.path.join(root, pattern)):
         if not os.path.isfile(f):
@@ -199,7 +206,11 @@ if __name__ == '__main__':
     r.daily_report()
     r.symlink_results()
 
+    print()
+
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
     rm_old_reps(os.environ['HTML_DIR'])
+
+    print()
 
     diff_last_two(os.environ['HTML_DIR'])
