@@ -115,13 +115,27 @@ class CaptainBarnacle(object):
         self.html = os.path.join(self.outpath, 'rep{}.html'.format(date_str))
 
     def daily_report(self):
-        """Generate daily report."""
+        """Generate daily report.
+
+        Returns
+        -------
+        success : bool
+            Success status.
+
+        """
         c = CreatureReport()
         c.parse_log(self.pdklog)
-        c.to_html(self.html, overwrite=True)
 
-        # Add group write permission.
-        os.chmod(self.html, os.stat(self.html).st_mode | stat.S_IWGRP)
+        if len(c.data) < 1:
+            success = False
+        else:
+            c.to_html(self.html, overwrite=True)
+            success = True
+
+            # Add group write permission.
+            os.chmod(self.html, os.stat(self.html).st_mode | stat.S_IWGRP)
+
+        return success
 
     def symlink_results(self):
         """Create symbolic link in ``REMOTE_DIR`` to the latest report."""
@@ -139,6 +153,7 @@ def diff_last_two(root, pattern='rep*.html'):
     or new warnings popped up.
 
     """
+    no_diff = True
     f_prev, f_next = sorted(glob.iglob(os.path.join(root, pattern)))[-2:]
 
     with open(f_prev) as fin:
@@ -146,13 +161,13 @@ def diff_last_two(root, pattern='rep*.html'):
     with open(f_next) as fin:
         s2 = fin.readlines()
 
-    diff_lines = context_diff(s1, s2, fromfile=f_prev, tofile=f_next)
+    for line in context_diff(s1, s2, fromfile=f_prev, tofile=f_next):
+        sys.stdout.write(line)
+        if no_diff:
+            no_diff = False
 
-    if len(diff_lines) < 1:
+    if no_diff:
         print('No diff')
-    else:
-        for line in diff_lines:
-            sys.stdout.write(line)
 
 
 def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
@@ -203,14 +218,14 @@ def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
 if __name__ == '__main__':
     """Batch script for cron job."""
     r = CaptainBarnacle()
-    r.daily_report()
-    r.symlink_results()
+    success = r.daily_report()
+    if success:
+        r.symlink_results()
+        print()
+        diff_last_two(os.environ['HTML_DIR'])
+    else:
+        print('PDK log is empty!')
 
     print()
-
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
     rm_old_reps(os.environ['HTML_DIR'])
-
-    print()
-
-    diff_last_two(os.environ['HTML_DIR'])
