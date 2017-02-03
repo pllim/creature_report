@@ -224,7 +224,7 @@ if __name__ == '__main__':
         print()
         diff_last_two(os.environ['HTML_DIR'])
     else:
-        print('PDK log is empty!')
+        print('PDK is empty or has no info of interest!')
 
     print()
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
