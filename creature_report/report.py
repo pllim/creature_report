@@ -10,7 +10,8 @@ from collections import Counter
 from datetime import datetime
 from difflib import context_diff
 
-__all__ = ['CreatureReport', 'CaptainBarnacle', 'rm_old_reps']
+__all__ = ['CreatureReport', 'CaptainBarnacle', 'calling_all_octonauts',
+           'get_all_reports', 'diff_last_two', 'rm_old_reps']
 
 
 class CreatureReport(object):
@@ -26,6 +27,12 @@ class CreatureReport(object):
     """
     def __init__(self):
         self.data = {}
+        self.empty_log = True
+
+    @property
+    def has_data(self):
+        """Indicate whether any interesting data is captured."""
+        return len(self.data) > 0
 
     def parse_log(self, filename):
         """Parse raw log from ``pdk export``."""
@@ -39,6 +46,8 @@ class CreatureReport(object):
         with open(filename) as fin:
             for line in fin:
                 row = line.strip()
+                if self.empty_log:
+                    self.empty_log = False
 
                 # Start of individual test log
                 if 'scalar_project=' in row:
@@ -87,63 +96,113 @@ class CreatureReport(object):
             fout.write('<title>{}</title>\n'.format(title))
             fout.write('<body>\n')
 
-            for warn_str in sorted(self.data):
-                warn_dict = self.data[warn_str]
-                fout.write('<p>{}</p>\n'.format(warn_str))
+            if self.has_data:
+                for warn_str in sorted(self.data):
+                    warn_dict = self.data[warn_str]
+                    fout.write('<p>{}</p>\n'.format(warn_str))
 
-                for module_loc in sorted(warn_dict):
-                    t_counter = warn_dict[module_loc]
-                    fout.write('<p>&emsp;&emsp;{}</p>\n'.format(module_loc))
+                    for module_loc in sorted(warn_dict):
+                        t_counter = warn_dict[module_loc]
+                        fout.write(
+                            '<p>&emsp;&emsp;{}</p>\n'.format(module_loc))
 
-                    for t_info in sorted(t_counter):
-                        val = t_counter[t_info]
-                        fout.write('<p>&emsp;&emsp;&emsp;&emsp;{}'.format(
-                            t_info))
-                        if val > 1:
-                            fout.write(' (repeated {} times)'.format(val))
-                        fout.write('</p>\n')
+                        for t_info in sorted(t_counter):
+                            val = t_counter[t_info]
+                            fout.write('<p>&emsp;&emsp;&emsp;&emsp;{}'.format(
+                                t_info))
+                            if val > 1:
+                                fout.write(' (repeated {} times)'.format(val))
+                            fout.write('</p>\n')
+
+            elif self.empty_log:
+                fout.write('<p>PDK log is empty!</p>\n')
+
+            else:
+                fout.write('<p>PDK log has no info of interest! '
+                           'Yes, this is a good thing.</p>\n')
 
             fout.write('</body>\n</html>\n')
 
 
 class CaptainBarnacle(object):
     """Class to automate :class:`CreatureReport`."""
-    def __init__(self, date_str=datetime.today().strftime('%Y%m%d')):
+    def __init__(self, date_str=datetime.today().strftime('%Y%m%d'),
+                 in_pfx='pdklog', out_pfx='rep'):
         self.path = os.environ['REMOTE_DIR']
         self.outpath = os.environ['HTML_DIR']
-        self.pdklog = os.path.join(self.path, 'pdklog{}.txt'.format(date_str))
-        self.html = os.path.join(self.outpath, 'rep{}.html'.format(date_str))
+        self.pdklog = os.path.join(
+            self.path, '{}{}.txt'.format(in_pfx, date_str))
+        self.html = os.path.join(
+            self.outpath, '{}{}.html'.format(out_pfx, date_str))
 
     def daily_report(self):
-        """Generate daily report.
-
-        Returns
-        -------
-        success : bool
-            Success status.
-
-        """
+        """Generate daily report."""
         c = CreatureReport()
         c.parse_log(self.pdklog)
+        c.to_html(self.html, overwrite=True)
 
-        if len(c.data) < 1:
-            success = False
-        else:
-            c.to_html(self.html, overwrite=True)
-            success = True
+        # Add group write permission.
+        os.chmod(self.html, os.stat(self.html).st_mode | stat.S_IWGRP)
 
-            # Add group write permission.
-            os.chmod(self.html, os.stat(self.html).st_mode | stat.S_IWGRP)
-
-        return success
-
-    def symlink_results(self):
+    def symlink_results(self, linkfile='daily_report.html'):
         """Create symbolic link in ``REMOTE_DIR`` to the latest report."""
-        dstfile = os.path.join(self.outpath, 'daily_report.html')
+        dstfile = os.path.join(self.outpath, linkfile)
         if os.path.lexists(dstfile):
             os.unlink(dstfile)
         os.symlink(self.html, dstfile)
         print('{} is now pointed to {}'.format(dstfile, self.html))
+
+
+def calling_all_octonauts(filename='index.html', title='Creature Report',
+                          overwrite=False):
+    """Generate main index."""
+    if not overwrite and os.path.exists(filename):
+        print('{} exists, use overwrite=True to write '
+              'anyway'.format(filename))
+        return
+
+    root = os.environ['HTML_DIR']
+    machine_name = 'nott'
+
+    # dev + jwst
+    all_but_last_dev = get_all_reports(root, pattern='rep*.html')[1:]
+    daily_dev = 'daily_report.html'
+
+    # public
+    all_but_last_pub = get_all_reports(root, pattern='pub*.html')[1:]
+    daily_pub = 'daily_report_pub.html'
+
+    with open(filename, 'w') as fout:
+        fout.write('<html>\n')
+        fout.write('<title>{}</title>\n'.format(title))
+        fout.write('<body>\n')
+        fout.write('<p>Lists of known deprecation warnings detected in '
+                   'regression tests managed by STScI Science Software '
+                   'Branch are available for <a href={}>dev build</a> and '
+                   '<a href={}>public build</a>. These lists are '
+                   'refreshed daily from "{}" test results.</p>\n'.format(
+                       daily_dev, daily_pub, machine_name))
+        fout.write('<p>Older reports from dev build for the past 7 days:'
+                   '<br/>\n<ul>\n')
+        for s in all_but_last_dev:
+            fout.write('<li/><a href="{0}">{0}</a>\n'.format(
+                os.path.basename(s)))
+        fout.write('</ul>\n</p>\n')
+        fout.write('<p>Older reports from public build for the past 7 days:'
+                   '<br/>\n<ul>\n')
+        for s in all_but_last_pub:
+            fout.write('<li/><a href="{0}">{0}</a>\n'.format(
+                os.path.basename(s)))
+        fout.write('</ul>\n</p>\n')
+        fout.write('</body>\n</html>\n')
+
+    # Add group write permission.
+    os.chmod(filename, os.stat(filename).st_mode | stat.S_IWGRP)
+
+
+def get_all_reports(root, pattern='rep*.html'):
+    """Return all HTML reports, sorted in descending alphabetical order."""
+    return sorted(glob.iglob(os.path.join(root, pattern)), reverse=True)
 
 
 def diff_last_two(root, pattern='rep*.html'):
@@ -154,7 +213,7 @@ def diff_last_two(root, pattern='rep*.html'):
 
     """
     no_diff = True
-    f_prev, f_next = sorted(glob.iglob(os.path.join(root, pattern)))[-2:]
+    f_next, f_prev = get_all_reports(root, pattern=pattern)[:2]
 
     with open(f_prev) as fin:
         s1 = fin.readlines()
@@ -193,8 +252,6 @@ def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
     max_sec = 86400.0 * max_life
     t_now = time.time()  # sec
 
-    print('Cleaning old files...')
-
     for f in glob.iglob(os.path.join(root, pattern)):
         if not os.path.isfile(f):
             continue
@@ -217,15 +274,31 @@ def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
 
 if __name__ == '__main__':
     """Batch script for cron job."""
+
+    # dev + jwst
     r = CaptainBarnacle()
-    success = r.daily_report()
-    if success:
-        r.symlink_results()
-        print()
-        diff_last_two(os.environ['HTML_DIR'])
-    else:
-        print('PDK is empty or has no info of interest!')
+    r.daily_report()
+    r.symlink_results()
+    print()
+    diff_last_two(os.environ['HTML_DIR'])
+
+    # public
+    r = CaptainBarnacle(in_pfx='pdkpub', out_pfx='pub')
+    r.daily_report()
+    r.symlink_results(linkfile='daily_report_pub.html')
+    print()
+    diff_last_two(os.environ['HTML_DIR'], pattern='pub*.html')
+
+    # index
+    calling_all_octonauts(overwrite=True)
 
     print()
+    print('Cleaning old files...')
+
+    # dev + jwst
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
     rm_old_reps(os.environ['HTML_DIR'])
+
+    # public
+    rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdkpub*.txt')
+    rm_old_reps(os.environ['HTML_DIR'], pattern='pub*.html')
