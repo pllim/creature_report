@@ -29,6 +29,9 @@ class CreatureReport(object):
         self.data = {}
         self.empty_log = True
 
+        # Exact warnings to catch. Set to empty list to catch it all.
+        self.creatures = ['DeprecationWarning', 'FutureWarning']
+
     @property
     def has_data(self):
         """Indicate whether any interesting data is captured."""
@@ -59,20 +62,32 @@ class CreatureReport(object):
                     scalar_test_name = row.split('=')[1]
 
                 # Warning to be captured. Each test can have multiple.
-                elif (row.startswith('.[WARNING') and
-                      ('DeprecationWarning' in row or
-                       'FutureWarning' in row) and
-                      in_data_block):
-                    words = row.split()
-                    module_loc = '/'.join(words[2].split('/')[-3:])[:-1]
-                    warn_str = ' '.join(words[3:])
-                    t_info = '{}: {}'.format(scalar_project, scalar_test_name)
-                    # Store in class data
-                    if warn_str not in self.data:
-                        self.data[warn_str] = {}
-                    if module_loc not in self.data[warn_str]:
-                        self.data[warn_str][module_loc] = Counter()
-                    self.data[warn_str][module_loc][t_info] += 1
+                # Note: Probably more elegant to use regex but that is also
+                #       hard to understand...
+                elif ((row.startswith('.[WARNING') or
+                       row.startswith('.Warning')) and in_data_block):
+                    has_creature = False
+
+                    if len(self.creatures) == 0:
+                        has_creature = True
+                    else:
+                        for creature in self.creatures:
+                            if creature in row:
+                                has_creature = True
+                                break
+
+                    if has_creature:
+                        words = row.split()
+                        module_loc = '/'.join(words[2].split('/')[-3:])[:-1]
+                        warn_str = ' '.join(words[3:])
+                        t_info = '{}: {}'.format(
+                            scalar_project, scalar_test_name)
+                        # Store in class data
+                        if warn_str not in self.data:
+                            self.data[warn_str] = {}
+                        if module_loc not in self.data[warn_str]:
+                            self.data[warn_str][module_loc] = Counter()
+                        self.data[warn_str][module_loc][t_info] += 1
 
                 # End of individual test log
                 elif row == 'END' and in_data_block:
