@@ -289,31 +289,34 @@ def rm_old_reps(root, pattern='rep*.html', max_life=7.0, verbose=True):
 
 if __name__ == '__main__':
     """Batch script for cron job."""
+    html_dir = os.environ['HTML_DIR']
 
     # dev + jwst
     r = CaptainBarnacle()
     r.daily_report()
     r.symlink_results()
+    diff_last_two(html_dir)
+
     print()
-    diff_last_two(os.environ['HTML_DIR'])
 
     # public
     r = CaptainBarnacle(in_pfx='pdkpub', out_pfx='pub')
     r.daily_report()
     r.symlink_results(linkfile='daily_report_pub.html')
-    print()
-    diff_last_two(os.environ['HTML_DIR'], pattern='pub*.html')
+    diff_last_two(html_dir, pattern='pub*.html')
 
     # index
-    calling_all_octonauts(overwrite=True)
+    print('Generating index...')
+    calling_all_octonauts(filename=os.path.join(html_dir, 'index.html'),
+                          overwrite=True)
 
     print()
     print('Cleaning old files...')
 
     # dev + jwst
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
-    rm_old_reps(os.environ['HTML_DIR'])
+    rm_old_reps(html_dir)
 
     # public
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdkpub*.txt')
-    rm_old_reps(os.environ['HTML_DIR'], pattern='pub*.html')
+    rm_old_reps(html_dir, pattern='pub*.html')
