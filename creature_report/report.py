@@ -296,7 +296,6 @@ if __name__ == '__main__':
     r.daily_report()
     r.symlink_results()
     diff_last_two(html_dir)
-
     print()
 
     # public
@@ -304,6 +303,7 @@ if __name__ == '__main__':
     r.daily_report()
     r.symlink_results(linkfile='daily_report_pub.html')
     diff_last_two(html_dir, pattern='pub*.html')
+    print()
 
     # index
     print('Generating index...')
