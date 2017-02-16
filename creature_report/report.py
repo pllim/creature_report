@@ -2,6 +2,7 @@
 from __future__ import absolute_import, division, print_function
 
 import glob
+import json
 import os
 import stat
 import sys
@@ -27,6 +28,7 @@ class CreatureReport(object):
     """
     def __init__(self):
         self.data = {}
+        self.stats = {}
         self.empty_log = True
 
         # Exact warnings to catch. Set to empty list to catch it all.
@@ -57,9 +59,22 @@ class CreatureReport(object):
                     in_data_block = True
                     scalar_project = row.split('=')[1]
 
+                    if scalar_project not in self.stats:
+                        self.stats[scalar_project] = Counter()
+
                 # Individual test name
                 elif 'scalar_test_name=' in row and in_data_block:
                     scalar_test_name = row.split('=')[1]
+
+                # Individual test result
+                # P = pass
+                # F = fail
+                # E = error
+                # D = disable
+                # M = missing?
+                elif 'scalar_status=' in row and in_data_block:
+                    scalar_status = row.split('=')[1]
+                    self.stats[scalar_project][scalar_status] += 1
 
                 # Warning to be captured. Each test can have multiple.
                 # Note: Probably more elegant to use regex but that is also
@@ -138,6 +153,16 @@ class CreatureReport(object):
 
             fout.write('</body>\n</html>\n')
 
+    def report_stats(self, filename, overwrite=False):
+        """JSON file of test result stats."""
+        if not overwrite and os.path.exists(filename):
+            print('{} exists, use overwrite=True to write '
+                  'anyway'.format(filename))
+            return
+
+        with open(filename, 'w') as fout:
+            json.dump(self.stats, fout, sort_keys=True, indent=4)
+
 
 class CaptainBarnacle(object):
     """Class to automate :class:`CreatureReport`."""
@@ -147,6 +172,8 @@ class CaptainBarnacle(object):
         self.outpath = os.environ['HTML_DIR']
         self.pdklog = os.path.join(
             self.path, '{}{}.txt'.format(in_pfx, date_str))
+        self.stat = os.path.join(
+            self.path, 'stats_{}{}.json'.format(out_pfx, date_str))
         self.html = os.path.join(
             self.outpath, '{}{}.html'.format(out_pfx, date_str))
 
@@ -155,6 +182,7 @@ class CaptainBarnacle(object):
         c = CreatureReport()
         c.parse_log(self.pdklog)
         c.to_html(self.html, overwrite=True)
+        c.report_stats(self.stat, overwrite=True)
 
         # Add group write permission.
         os.chmod(self.html, os.stat(self.html).st_mode | stat.S_IWGRP)
@@ -315,8 +343,10 @@ if __name__ == '__main__':
 
     # dev + jwst
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
+    rm_old_reps(os.environ['REMOTE_DIR'], pattern='stats_rep*.json')
     rm_old_reps(html_dir)
 
     # public
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdkpub*.txt')
+    rm_old_reps(os.environ['REMOTE_DIR'], pattern='stats_pub*.json')
     rm_old_reps(html_dir, pattern='pub*.html')
