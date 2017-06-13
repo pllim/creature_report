@@ -80,6 +80,7 @@ class CreatureReport(object):
                 # Note: Probably more elegant to use regex but that is also
                 #       hard to understand...
                 elif ((row.startswith('.[WARNING') or
+                       row.startswith('.WARNING') or
                        row.startswith('.Warning')) and in_data_block):
                     has_creature = False
 
