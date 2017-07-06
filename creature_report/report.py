@@ -268,7 +268,13 @@ def diff_last_two(root, pattern='rep*.html'):
 
     """
     no_diff = True
-    f_next, f_prev = get_all_reports(root, pattern=pattern)[:2]
+    two_files = get_all_reports(root, pattern=pattern)[:2]
+
+    if len(two_files) != 2:
+        print('No diff')
+        return
+
+    f_next, f_prev = two_files
 
     with open(f_prev) as fin:
         s1 = fin.readlines()
