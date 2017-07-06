@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function
 import glob
 import json
 import os
+import re
 import stat
 import sys
 import time
@@ -13,6 +14,8 @@ from difflib import context_diff
 
 __all__ = ['CreatureReport', 'CaptainBarnacle', 'calling_all_octonauts',
            'get_all_reports', 'diff_last_two', 'rm_old_reps']
+
+_warn_regex = re.compile(r"^\.\[?warning", re.IGNORECASE)
 
 
 class CreatureReport(object):
@@ -79,9 +82,7 @@ class CreatureReport(object):
                 # Warning to be captured. Each test can have multiple.
                 # Note: Probably more elegant to use regex but that is also
                 #       hard to understand...
-                elif ((row.startswith('.[WARNING') or
-                       row.startswith('.WARNING') or
-                       row.startswith('.Warning')) and in_data_block):
+                elif _warn_regex.match(row) and in_data_block:
                     has_creature = False
 
                     if len(self.creatures) == 0:
@@ -206,38 +207,48 @@ def calling_all_octonauts(filename='index.html', title='Creature Report',
         return
 
     root = os.environ['HTML_DIR']
-    machine_name = 'nott'
 
-    # dev + jwst
+    # nott dev + jwst
     all_but_last_dev = get_all_reports(root, pattern='rep*.html')[1:]
     daily_dev = 'daily_report.html'
 
-    # public
+    # nott public
     all_but_last_pub = get_all_reports(root, pattern='pub*.html')[1:]
     daily_pub = 'daily_report_pub.html'
+
+    # pembry dev
+    all_but_last_pemdev = get_all_reports(root, pattern='pemrep*.html')[1:]
+    daily_pemdev = 'daily_report_pemdev.html'
+
+    # pembry public
+    all_but_last_pempub = get_all_reports(root, pattern='pempub*.html')[1:]
+    daily_pempub = 'daily_report_pempub.html'
 
     with open(filename, 'w') as fout:
         fout.write('<html>\n')
         fout.write('<title>{}</title>\n'.format(title))
         fout.write('<body>\n')
         fout.write('<p>Lists of known deprecation warnings detected in '
-                   'regression tests managed by STScI Science Software '
-                   'Branch are available for <a href={}>dev build</a> and '
-                   '<a href={}>public build</a>. These lists are '
-                   'refreshed daily from "{}" test results.</p>\n'.format(
-                       daily_dev, daily_pub, machine_name))
-        fout.write('<p>Older reports from dev build for the past 7 days:'
-                   '<br/>\n<ul>\n')
-        for s in all_but_last_dev:
-            fout.write('<li/><a href="{0}">{0}</a>\n'.format(
-                os.path.basename(s)))
+                   'regression tests, refreshed daily from test results, '
+                   'managed by STScI Data Analysis Tools Branch are '
+                   'available below:<br/>\n<ul>\n')
+        for s1, s2 in [(daily_dev, 'nott dev'),
+                       (daily_pub, 'nott public'),
+                       (daily_pemdev, 'pembry dev'),
+                       (daily_pempub, 'pembry public')]:
+            fout.write(
+                '<li/><a href="{0}">{0}</a> ({1} build)\n'.format(s1, s2))
         fout.write('</ul>\n</p>\n')
-        fout.write('<p>Older reports from public build for the past 7 days:'
-                   '<br/>\n<ul>\n')
-        for s in all_but_last_pub:
-            fout.write('<li/><a href="{0}">{0}</a>\n'.format(
-                os.path.basename(s)))
-        fout.write('</ul>\n</p>\n')
+        for s1, s2 in [('nott dev', all_but_last_dev),
+                       ('nott public', all_but_last_pub),
+                       ('pembry dev', all_but_last_pemdev),
+                       ('pembry public', all_but_last_pempub)]:
+            fout.write('<p>Older reports from {0} build for the past 7 days:'
+                       '<br/>\n<ul>\n'.format(s1))
+            for s in s2:
+                fout.write('<li/><a href="{0}">{0}</a>\n'.format(
+                    os.path.basename(s)))
+            fout.write('</ul>\n</p>\n')
         fout.write('</body>\n</html>\n')
 
     # Add group write permission.
@@ -320,18 +331,32 @@ if __name__ == '__main__':
     """Batch script for cron job."""
     html_dir = os.environ['HTML_DIR']
 
-    # dev + jwst
+    # nott dev + jwst
     r = CaptainBarnacle()
     r.daily_report()
     r.symlink_results()
     diff_last_two(html_dir)
     print()
 
-    # public
+    # nott public
     r = CaptainBarnacle(in_pfx='pdkpub', out_pfx='pub')
     r.daily_report()
     r.symlink_results(linkfile='daily_report_pub.html')
     diff_last_two(html_dir, pattern='pub*.html')
+    print()
+
+    # pembry dev
+    r = CaptainBarnacle(in_pfx='pdkpemlog', out_pfx='pemrep')
+    r.daily_report()
+    r.symlink_results(linkfile='daily_report_pemdev.html')
+    diff_last_two(html_dir, pattern='pemrep*.html')
+    print()
+
+    # pembry public
+    r = CaptainBarnacle(in_pfx='pdkpempub', out_pfx='pempub')
+    r.daily_report()
+    r.symlink_results(linkfile='daily_report_pempub.html')
+    diff_last_two(html_dir, pattern='pempub*.html')
     print()
 
     # index
@@ -342,12 +367,22 @@ if __name__ == '__main__':
     print()
     print('Cleaning old files...')
 
-    # dev + jwst
+    # nott dev + jwst
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdklog*.txt')
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='stats_rep*.json')
     rm_old_reps(html_dir)
 
-    # public
+    # nott public
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdkpub*.txt')
     rm_old_reps(os.environ['REMOTE_DIR'], pattern='stats_pub*.json')
     rm_old_reps(html_dir, pattern='pub*.html')
+
+    # pembry dev
+    rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdkpemlog*.txt')
+    rm_old_reps(os.environ['REMOTE_DIR'], pattern='stats_pemrep*.json')
+    rm_old_reps(html_dir, pattern='pemrep*.html')
+
+    # pembry public
+    rm_old_reps(os.environ['REMOTE_DIR'], pattern='pdkpempub*.txt')
+    rm_old_reps(os.environ['REMOTE_DIR'], pattern='stats_pempub*.json')
+    rm_old_reps(html_dir, pattern='pempub*.html')
