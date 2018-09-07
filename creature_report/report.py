@@ -338,28 +338,28 @@ if __name__ == '__main__':
     html_dir = os.environ['HTML_DIR']
 
     # nott dev + jwst
-    r = CaptainBarnacle()
+    r = CaptainBarnacle(in_pfx='pdklog_nott_dev_')
     r.daily_report()
     r.symlink_results()
     diff_last_two(html_dir)
     print()
 
     # nott public
-    r = CaptainBarnacle(in_pfx='pdkpub', out_pfx='pub')
+    r = CaptainBarnacle(in_pfx='pdklog_nott_public_', out_pfx='pub')
     r.daily_report()
     r.symlink_results(linkfile='daily_report_pub.html')
     diff_last_two(html_dir, pattern='pub*.html')
     print()
 
     # pembry dev
-    r = CaptainBarnacle(in_pfx='pdkpemlog', out_pfx='pemrep')
+    r = CaptainBarnacle(in_pfx='pdklog_banana_dev_', out_pfx='pemrep')
     r.daily_report()
     r.symlink_results(linkfile='daily_report_pemdev.html')
     diff_last_two(html_dir, pattern='pemrep*.html')
     print()
 
     # pembry public
-    r = CaptainBarnacle(in_pfx='pdkpempub', out_pfx='pempub')
+    r = CaptainBarnacle(in_pfx='pdklog_banana_public_', out_pfx='pempub')
     r.daily_report()
     r.symlink_results(linkfile='daily_report_pempub.html')
     diff_last_two(html_dir, pattern='pempub*.html')
